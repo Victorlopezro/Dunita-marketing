@@ -597,6 +597,75 @@
             gap: 0.75rem;
         }
 
+        .subscription-card {
+            background: rgba(53,52,58,0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(80,69,59,0.3);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .subscription-label {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--primary);
+        }
+
+        .subscription-input {
+            width: 100%;
+            padding: 0.9rem 1rem;
+            background: rgba(31,31,36,0.85);
+            border: 1px solid rgba(80,69,59,0.3);
+            color: var(--on-surface);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            border-radius: 0.45rem;
+        }
+
+        .subscription-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .subscription-btn {
+            width: 100%;
+            padding: 0.95rem 1rem;
+            background: var(--primary);
+            color: var(--surface);
+            border: none;
+            border-radius: 0.45rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .subscription-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            opacity: 0.95;
+        }
+
+        .subscription-message {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8rem;
+            min-height: 1.2rem;
+            color: var(--on-surface-variant);
+        }
+
+        .subscription-message.success {
+            color: var(--tertiary);
+        }
+
+        .subscription-message.error {
+            color: var(--error);
+        }
+
         .tries-header {
             display: flex;
             justify-content: space-between;
@@ -1242,6 +1311,13 @@
                     </button>
                 </div>
 
+                <div class="subscription-card">
+                    <div class="subscription-label">SUSCRÍBETE AL MERCADO</div>
+                    <input type="email" id="subscription-email" class="subscription-input" placeholder="Tu email para recibir avisos" aria-label="Correo electrónico">
+                    <button id="subscription-btn" class="subscription-btn" type="button">SUSCRIBIR</button>
+                    <div id="subscription-message" class="subscription-message"></div>
+                </div>
+
                 <div class="action-warning">
                     <span class="warning-badge">[ ADVERTENCIA: OPERACIÓN DE ALTO RIESGO ]</span>
                 </div>
@@ -1348,6 +1424,9 @@
         let selectedItems = [];
         let isSpinning = false;
 
+        // ========== BACKEND CONFIG ==========
+        const BACKEND_URL = 'https://dunita-marketing-production.up.railway.app';
+
         // ========== ITEMS DATA ==========
         const items = [
             { name: "Sandworm Juvenil", type: "CRIATURA", rarity: "legendario", description: "Un joven Shai-Hulud captado en las arenas de abierto. Su domesticación podría cambiar la guerra.", image: "Captura de pantalla 2026-04-16 223231.png" },
@@ -1398,6 +1477,9 @@
         const exchangeBtn = document.getElementById('exchange-btn');
         const resultModal = document.getElementById('result-modal');
         const exchangeModal = document.getElementById('exchange-modal');
+        const subscriptionEmail = document.getElementById('subscription-email');
+        const subscriptionBtn = document.getElementById('subscription-btn');
+        const subscriptionMessage = document.getElementById('subscription-message');
 
         // ========== GLITCH EFFECT ==========
         function glitchText(text, element, duration = 2000) {
@@ -1598,6 +1680,51 @@
             }
         }
 
+        // ========== SUBSCRIPTION ==========
+        async function subscribeToMarket() {
+            const email = subscriptionEmail.value.trim();
+            if (!email) {
+                showSubscriptionMessage('Ingresa un email válido.', 'error');
+                return;
+            }
+
+            subscriptionBtn.disabled = true;
+            subscriptionBtn.textContent = 'CONECTANDO...';
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/subscribe`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    showSubscriptionMessage(data.message || 'Suscripción exitosa.', 'success');
+                    subscriptionEmail.value = '';
+                } else {
+                    showSubscriptionMessage(data.error || 'Error al suscribir.', 'error');
+                }
+            } catch (error) {
+                console.error('Subscription error:', error);
+                showSubscriptionMessage('No se pudo conectar al backend.', 'error');
+            } finally {
+                subscriptionBtn.disabled = false;
+                subscriptionBtn.textContent = 'SUSCRIBIR';
+            }
+        }
+
+        function showSubscriptionMessage(message, type) {
+            subscriptionMessage.textContent = message;
+            subscriptionMessage.className = `subscription-message ${type}`;
+            setTimeout(() => {
+                subscriptionMessage.textContent = '';
+                subscriptionMessage.className = 'subscription-message';
+            }, 5000);
+        }
+
         // ========== EXCHANGE MODAL ==========
         function openExchangeModal() {
             if (inventory.length < 2) return;
@@ -1701,6 +1828,13 @@
         });
         
         document.getElementById('confirm-exchange').addEventListener('click', confirmExchange);
+        subscriptionBtn.addEventListener('click', subscribeToMarket);
+        subscriptionEmail.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                subscribeToMarket();
+            }
+        });
 
         // ========== INIT ==========
         initIntro();
