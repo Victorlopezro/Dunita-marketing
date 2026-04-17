@@ -1,0 +1,13 @@
+{
+  "name": "dunita-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for Dunita marketing page",
+  "scripts": {
+    "dev": "serve .",
+    "build": "echo 'No build step required'",
+    "start": "serve ."
+  },
+  "devDependencies": {
+    "serve": "^14.2.1"
+  }
+}
