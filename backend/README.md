@@ -23,3 +23,17 @@ Backend API for the Dunita marketing page.
 
 - `POST /api/subscribe` - Subscribe with email
 - `GET /api/subscribers` - Get all subscribers (admin)
+
+## Test de funcionamiento
+
+Puedes ejecutar el test de suscripción desde el directorio `backend`:
+
+```bash
+npm run test:subscribe
+```
+
+También puedes probar con un email personalizado:
+
+```bash
+node test-subscribe.js tu-email@ejemplo.com
+```
