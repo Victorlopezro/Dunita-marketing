@@ -1,0 +1,3471 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso al Mercado Negro del Sietch de Arrakis</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700;900&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #f2c08d;
+            --primary-container: #d4a574;
+            --surface: #131318;
+            --surface-container-low: #1b1b20;
+            --surface-container: #1f1f24;
+            --surface-container-high: #2a292f;
+            --surface-bright: #39393e;
+            --tertiary: #00e83a;
+            --error: #ffb4ab;
+            --on-surface: #e4e1e9;
+            --on-surface-variant: #d4c4b7;
+            --outline: #9c8e82;
+            --outline-variant: #50453b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--surface);
+            color: var(--on-surface);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Scanlines overlay */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Noise overlay */
+        .noise {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        /* ========== INTRO SCREEN ========== */
+        #intro-screen {
+            position: fixed;
+            inset: 0;
+            display: none; /* Hidden by default - auth shows first */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+
+        #intro-screen.visible {
+            display: flex;
+        }
+
+        #intro-screen.hidden {
+            opacity: 0;
+            transform: scale(1.1);
+            pointer-events: none;
+        }
+
+        .intro-bg {
+            position: absolute;
+            inset: 0;
+            background-image: url('imagen intro.png');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.4;
+            filter: grayscale(30%) sepia(20%);
+        }
+
+        .intro-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, rgba(19,19,24,0.3), rgba(19,19,24,0.9));
+        }
+
+        .intro-content {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            max-width: 900px;
+            padding: 2rem;
+        }
+
+        .intro-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(1.5rem, 5vw, 3.5rem);
+            font-weight: 900;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            line-height: 1.2;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: glitchReveal 0.1s forwards;
+        }
+
+        .intro-title .glitch-char {
+            display: inline-block;
+            opacity: 0;
+            animation: charReveal 0.05s forwards;
+        }
+
+        @keyframes charReveal {
+            0% { opacity: 0; transform: translateX(-5px); }
+            50% { opacity: 1; transform: translateX(3px); }
+            100% { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes glitchReveal {
+            0% { opacity: 0; }
+            10% { opacity: 1; text-shadow: 3px 0 var(--tertiary), -3px 0 var(--error); }
+            20% { text-shadow: none; }
+            30% { text-shadow: 2px 0 var(--tertiary); }
+            40% { text-shadow: none; }
+            100% { opacity: 1; text-shadow: none; }
+        }
+
+        .intro-button {
+            margin-top: 3rem;
+            padding: 1rem 3rem;
+            background: transparent;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            cursor: pointer;
+            opacity: 0;
+            animation: buttonFadeIn 0.5s ease forwards;
+            animation-delay: 2.5s;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .intro-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--primary);
+            transition: left 0.3s ease;
+            z-index: -1;
+        }
+
+        .intro-button:hover::before {
+            left: 0;
+        }
+
+        .intro-button:hover {
+            color: var(--surface);
+        }
+
+        .intro-button.glitch-hover:hover {
+            transform: translate(2px, 2px);
+            box-shadow: 4px 4px 0 var(--primary);
+        }
+
+        @keyframes buttonFadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Corner decorations */
+        .corner {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border: 2px solid var(--outline-variant);
+            opacity: 0.3;
+            z-index: 5;
+        }
+        .corner-tl { top: 20px; left: 20px; border-right: none; border-bottom: none; }
+        .corner-tr { top: 20px; right: 20px; border-left: none; border-bottom: none; }
+        .corner-bl { bottom: 20px; left: 20px; border-right: none; border-top: none; }
+        .corner-br { bottom: 20px; right: 20px; border-left: none; border-top: none; }
+
+        /* Metadata */
+        .meta-top {
+            position: absolute;
+            top: 30px;
+            left: 0;
+            width: 100%;
+            padding: 0 40px;
+            display: flex;
+            justify-content: space-between;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--primary);
+            opacity: 0.6;
+            z-index: 5;
+        }
+
+        .meta-bottom {
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            width: 100%;
+            padding: 0 40px;
+            display: flex;
+            justify-content: space-between;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--primary);
+            opacity: 0.4;
+            z-index: 5;
+        }
+
+        /* ========== MARKET SCREEN ========== */
+        #market-screen {
+            position: fixed;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            z-index: 50;
+        }
+
+        #market-screen.active {
+            display: flex;
+        }
+
+        /* Header */
+        .market-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            background: var(--surface);
+            border-bottom: 1px solid rgba(212,165,116,0.2);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+        }
+
+        .market-logo {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 900;
+            font-size: 1rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .solaris-display {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .solaris-icon {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, #ffd700, #b8860b);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: #1a1a2e;
+            font-weight: bold;
+            box-shadow: 0 0 10px rgba(255,215,0,0.3);
+        }
+
+        /* Main market layout */
+        .market-main {
+            display: flex;
+            flex: 1;
+            margin-top: 60px;
+            margin-bottom: 50px;
+            overflow: hidden;
+        }
+
+        /* Terminal log panel */
+        .terminal-panel {
+            width: 35%;
+            padding: 1.5rem;
+            background: var(--surface-container-lowest, #0e0e13);
+            border-right: 1px solid rgba(80,69,59,0.2);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(80,69,59,0.5);
+            margin-bottom: 1rem;
+        }
+
+        .terminal-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.7rem;
+            color: var(--tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .terminal-log {
+            flex: 1;
+            overflow-y: auto;
+            font-family: 'Space Grotesk', monospace;
+            font-size: 0.65rem;
+            color: rgba(0,232,58,0.7);
+            line-height: 1.8;
+        }
+
+        .terminal-log .log-warning {
+            color: var(--error);
+        }
+
+        .terminal-log .log-success {
+            color: var(--primary);
+        }
+
+        .cursor-blink {
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Character panel */
+        .character-panel {
+            width: 35%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            position: relative;
+            background: var(--surface-container);
+        }
+
+        .dialogue-box {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 85%;
+            background: rgba(53,52,58,0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(80,69,59,0.3);
+            padding: 1rem;
+            box-shadow: 4px 4px 0 var(--primary);
+            z-index: 20;
+        }
+
+        .dialogue-text {
+            font-style: italic;
+            font-size: 0.85rem;
+            color: var(--on-surface-variant);
+            line-height: 1.6;
+        }
+
+        .dialogue-author {
+            margin-top: 0.5rem;
+            text-align: right;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.65rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .character-image {
+            width: 90%;
+            max-width: 300px;
+            aspect-ratio: 1;
+            position: relative;
+            border: 1px solid rgba(80,69,59,0.4);
+            margin-top: 80px;
+            overflow: hidden;
+        }
+
+        .character-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: grayscale(20%) sepia(20%);
+        }
+
+        .character-corners {
+            position: absolute;
+            inset: 8px;
+            pointer-events: none;
+        }
+
+        .character-corners::before,
+        .character-corners::after,
+        .character-corners span::before,
+        .character-corners span::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--primary);
+        }
+
+        .character-corners::before { top: 0; left: 0; border-right: none; border-bottom: none; }
+        .character-corners::after { top: 0; right: 0; border-left: none; border-bottom: none; }
+        .character-corners span::before { bottom: 0; left: 0; border-right: none; border-top: none; }
+        .character-corners span::after { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+        /* Character censorship effect */
+        .character-photo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: grayscale(20%) sepia(20%);
+        }
+
+        .character-censorship {
+            position: absolute;
+            top: 15%;
+            left: 20%;
+            width: 60%;
+            height: 25%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.8) 2px,
+                rgba(0,0,0,0.8) 4px
+            );
+            mix-blend-mode: multiply;
+            animation: censorshipGlitch 0.15s infinite;
+            pointer-events: none;
+        }
+
+        .character-censorship::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, 
+                rgba(255,0,0,0.1) 0%, 
+                transparent 20%,
+                transparent 80%,
+                rgba(0,255,0,0.1) 100%
+            );
+            animation: censorshipScan 2s linear infinite;
+        }
+
+        @keyframes censorshipGlitch {
+            0%, 100% { 
+                transform: translateX(0);
+                filter: blur(0px);
+            }
+            25% { 
+                transform: translateX(-2px) translateY(1px);
+                filter: blur(1px);
+            }
+            50% { 
+                transform: translateX(1px) translateY(-1px);
+                filter: blur(0px);
+            }
+            75% { 
+                transform: translateX(-1px);
+                filter: blur(0.5px);
+            }
+        }
+
+        @keyframes censorshipScan {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 100%; }
+        }
+
+        .character-meta {
+            margin-top: 1rem;
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 300px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.55rem;
+            color: var(--outline);
+            text-transform: uppercase;
+        }
+
+        /* Action panel */
+        .action-panel {
+            width: 30%;
+            padding: 2rem;
+            background: var(--surface-container-low);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 1.5rem;
+            border-left: 1px solid rgba(80,69,59,0.2);
+        }
+
+        .funds-card {
+            background: rgba(53,52,58,0.6);
+            backdrop-filter: blur(12px);
+            padding: 1.5rem;
+            border: 1px solid rgba(80,69,59,0.3);
+            position: relative;
+        }
+
+        .funds-label {
+            position: absolute;
+            top: -10px;
+            left: 1rem;
+            background: var(--surface);
+            padding: 0 0.5rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .funds-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 0.5rem;
+        }
+
+        .funds-amount {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            letter-spacing: -0.02em;
+        }
+
+        .funds-coin {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .funds-coin-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #ffd700, #b8860b);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #1a1a2e;
+            font-weight: bold;
+            box-shadow: 0 0 15px rgba(255,215,0,0.4);
+        }
+
+        .funds-coin-label {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.55rem;
+            color: rgba(242,192,141,0.6);
+            margin-top: 0.25rem;
+        }
+
+        .tries-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .tries-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tries-label {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            color: var(--on-surface-variant);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .tries-count {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.65rem;
+            color: var(--tertiary);
+        }
+
+        .tries-bars {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .try-bar {
+            flex: 1;
+            height: 6px;
+            background: var(--tertiary);
+            box-shadow: 0 0 8px rgba(0,232,58,0.5);
+            transition: all 0.3s ease;
+        }
+
+        .try-bar.used {
+            background: var(--outline-variant);
+            box-shadow: none;
+        }
+
+        .action-button {
+            width: 100%;
+            padding: 1rem;
+            background: var(--primary);
+            color: #472a03;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .action-button:hover:not(:disabled) {
+            transform: translate(2px, 2px);
+            box-shadow: 4px 4px 0 var(--primary);
+        }
+
+        .action-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .action-warning {
+            text-align: center;
+        }
+
+        .warning-badge {
+            display: inline-block;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.55rem;
+            color: rgba(255,180,171,0.8);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            border: 1px solid rgba(255,180,171,0.3);
+            padding: 0.35rem 0.75rem;
+        }
+
+        /* Footer */
+        .market-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1.5rem;
+            background: var(--surface);
+            border-top: 1px solid rgba(212,165,116,0.1);
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+        }
+
+        .footer-brand {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.55rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 1.5rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.55rem;
+            color: rgba(242,192,141,0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .footer-link {
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-link:hover {
+            color: var(--primary);
+        }
+
+        /* ========== RESULT MODAL ========== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(19,19,24,0.9);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 500;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--surface-container);
+            border: 1px solid var(--primary);
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+        }
+
+        .modal-content::before {
+            content: '';
+            position: absolute;
+            inset: 4px;
+            border: 1px solid rgba(212,165,116,0.2);
+            pointer-events: none;
+        }
+
+        .result-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-transform: uppercase;
+            margin-bottom: 1.5rem;
+        }
+
+        .result-title.error {
+            color: var(--error);
+            animation: glitchText 0.3s ease infinite;
+        }
+
+        @keyframes glitchText {
+            0%, 100% { text-shadow: 2px 0 var(--tertiary), -2px 0 var(--error); }
+            25% { text-shadow: -2px 0 var(--tertiary), 2px 0 var(--error); }
+            50% { text-shadow: 2px 0 var(--error); }
+            75% { text-shadow: -2px 0 var(--tertiary); }
+        }
+
+        .result-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .result-item-image {
+            width: 120px;
+            height: 120px;
+            object-fit: contain;
+            border: 2px solid var(--primary);
+            padding: 0.5rem;
+            background: var(--surface);
+        }
+
+        .result-item-name {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem;
+            color: var(--primary);
+            text-transform: uppercase;
+        }
+
+        .result-item-type {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.65rem;
+            color: var(--on-surface-variant);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .result-item-rarity {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.7rem;
+            padding: 0.25rem 0.75rem;
+            border: 1px solid currentColor;
+        }
+
+        .result-item-rarity.legendary { color: #ffd700; }
+        .result-item-rarity.epic { color: #a855f7; }
+        .result-item-rarity.rare { color: #3b82f6; }
+        .result-item-rarity.common { color: var(--on-surface-variant); }
+
+        .result-item-description {
+            font-size: 0.75rem;
+            color: var(--on-surface-variant);
+            line-height: 1.5;
+            max-width: 300px;
+        }
+
+        .modal-close {
+            margin-top: 1.5rem;
+            padding: 0.75rem 2rem;
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background: var(--primary);
+            color: #472a03;
+        }
+
+        /* ========== EXCHANGE MODAL ========== */
+        .exchange-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(19,19,24,0.95);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 600;
+            padding: 1rem;
+        }
+
+        .exchange-modal.active {
+            display: flex;
+        }
+
+        .exchange-content {
+            background: rgba(53,52,58,0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--primary);
+            width: 100%;
+            max-width: 1000px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .exchange-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--surface-container-low);
+            background: rgba(14,14,19,0.5);
+        }
+
+        .exchange-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.9rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .exchange-close {
+            background: none;
+            border: none;
+            color: var(--on-surface-variant);
+            cursor: pointer;
+            font-size: 1.5rem;
+            transition: color 0.2s;
+        }
+
+        .exchange-close:hover {
+            color: var(--primary);
+        }
+
+        .exchange-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .exchange-inventory {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            border-right: 1px solid rgba(80,69,59,0.2);
+        }
+
+        .exchange-section-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.7rem;
+            color: var(--on-surface-variant);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+        }
+
+        .inventory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .inventory-item {
+            aspect-ratio: 1;
+            background: var(--surface-container-low);
+            border: 1px solid rgba(80,69,59,0.3);
+            padding: 0.5rem;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .inventory-item:hover {
+            border-color: var(--primary);
+        }
+
+        .inventory-item.selected {
+            border-color: var(--tertiary);
+            background: rgba(0,232,58,0.1);
+        }
+
+        .inventory-item img {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+        }
+
+        .inventory-item-name {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.5rem;
+            color: var(--on-surface);
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .exchange-logic {
+            width: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: var(--surface-container-lowest, #0e0e13);
+        }
+
+        .logic-label {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            color: var(--primary);
+        }
+
+        .logic-arrow {
+            color: var(--tertiary);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .logic-icon {
+            width: 50px;
+            height: 50px;
+            border: 2px dashed rgba(0,232,58,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--tertiary);
+        }
+
+        .exchange-rewards {
+            flex: 1;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .reward-preview {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .reward-card {
+            width: 150px;
+            height: 200px;
+            background: var(--surface-container-low);
+            border: 1px solid rgba(80,69,59,0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 1rem;
+        }
+
+        .reward-card.empty {
+            border-style: dashed;
+        }
+
+        .reward-card img {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+        }
+
+        .reward-name {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.7rem;
+            color: var(--primary);
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .exchange-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--surface-container-low);
+            background: rgba(14,14,19,0.5);
+        }
+
+        .exchange-warning {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            color: var(--error);
+            text-transform: uppercase;
+        }
+
+        .exchange-button {
+            padding: 0.75rem 2rem;
+            background: #FF6B35;
+            color: var(--surface);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .exchange-button:hover:not(:disabled) {
+            background: #ff8555;
+            transform: translateX(2px);
+        }
+
+        .exchange-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Dialogue for exchange */
+        .exchange-dialogue {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: rgba(53,52,58,0.5);
+            border-left: 2px solid var(--primary);
+        }
+
+        .exchange-dialogue-text {
+            font-style: italic;
+            font-size: 0.85rem;
+            color: var(--on-surface-variant);
+        }
+
+        /* ========== AUTH SCREEN ========== */
+        .auth-container {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            gap: 4rem;
+            padding: 2rem;
+        }
+
+        .auth-container.hidden {
+            display: none;
+        }
+
+        .auth-bg {
+            position: absolute;
+            inset: 0;
+            background-image: url('imagen intro.png');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.3;
+            filter: grayscale(30%) sepia(20%);
+        }
+
+        .auth-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, rgba(19,19,24,0.5), rgba(19,19,24,0.95));
+        }
+
+        .auth-box {
+            position: relative;
+            z-index: 10;
+            background: rgba(31,31,36,0.95);
+            border: 1px solid rgba(242,192,141,0.3);
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 400px;
+            backdrop-filter: blur(12px);
+        }
+
+        .auth-logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .auth-logo .material-symbols-outlined {
+            font-size: 3rem;
+            color: var(--primary);
+        }
+
+        .auth-logo h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.2rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            margin-top: 0.5rem;
+        }
+
+        .auth-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 0.75rem;
+            background: transparent;
+            border: 1px solid rgba(80,69,59,0.3);
+            color: var(--on-surface-variant);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .auth-tab.active {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: #472a03;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            color: var(--on-surface-variant);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--surface-container-low);
+            border: 1px solid rgba(80,69,59,0.3);
+            color: var(--on-surface);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .auth-button {
+            width: 100%;
+            padding: 1rem;
+            margin-top: 1rem;
+            background: var(--primary);
+            border: none;
+            color: #472a03;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .auth-button:hover {
+            background: #ffdaa3;
+            transform: translateY(-2px);
+        }
+
+        .auth-error {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: rgba(255,180,171,0.1);
+            border: 1px solid rgba(255,180,171,0.3);
+            color: var(--error);
+            font-size: 0.75rem;
+            text-align: center;
+            display: none;
+        }
+
+        .auth-error.visible {
+            display: block;
+        }
+
+        .auth-footer {
+            margin-top: 1.5rem;
+            text-align: center;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.55rem;
+            color: var(--outline);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .auth-info {
+            position: relative;
+            z-index: 10;
+            max-width: 300px;
+        }
+
+        .auth-info h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.5rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+
+        .auth-info p {
+            color: var(--on-surface-variant);
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .auth-info ul {
+            list-style: none;
+        }
+
+        .auth-info li {
+            padding: 0.5rem 0;
+            color: var(--tertiary);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+        }
+
+        /* ========== PROFILE HEADER ========== */
+        .profile-nav {
+            display: none;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .profile-nav.visible {
+            display: flex;
+        }
+
+        .profile-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--surface-container);
+            border: 2px solid var(--primary);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .profile-avatar .material-symbols-outlined {
+            font-size: 1.2rem;
+            color: var(--primary);
+        }
+
+        .profile-username {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.75rem;
+            color: var(--primary);
+        }
+
+        .profile-logout {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid rgba(80,69,59,0.3);
+            color: var(--on-surface-variant);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .profile-logout:hover {
+            border-color: var(--error);
+            color: var(--error);
+        }
+
+        /* Friends Dropdown */
+        .friends-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .friends-dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 0.5rem;
+            background: var(--surface-container);
+            border: 1px solid var(--primary);
+            min-width: 280px;
+            z-index: 1000;
+            padding: 1rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        .friends-dropdown.active .friends-dropdown-content {
+            display: block;
+        }
+
+        .friends-dropdown-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.7rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(80,69,59,0.3);
+        }
+
+        .friends-dropdown-form {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .friends-dropdown-form input {
+            flex: 1;
+            padding: 0.5rem;
+            background: var(--surface-container-low);
+            border: 1px solid rgba(80,69,59,0.3);
+            color: var(--on-surface);
+            font-size: 0.8rem;
+        }
+
+        .friends-dropdown-form input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .friends-dropdown-form button {
+            padding: 0.5rem 0.75rem;
+            background: var(--tertiary);
+            border: none;
+            color: #0a2e0a;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        .friends-dropdown-list {
+            margin-top: 1rem;
+            border-top: 1px solid rgba(80,69,59,0.3);
+            padding-top: 0.5rem;
+        }
+
+        .friends-dropdown-list-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            color: var(--on-surface-variant);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+
+        .friend-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-bottom: 1px solid rgba(80,69,59,0.2);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .friend-dropdown-item:hover {
+            background: var(--surface-container-high);
+        }
+
+        .friend-dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .friend-dropdown-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--surface-container-high);
+            border: 1px solid var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .friend-dropdown-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .friend-dropdown-name {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.7rem;
+            color: var(--primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .friend-dropdown-status {
+            font-size: 0.55rem;
+            color: var(--tertiary);
+        }
+
+        .friend-dropdown-actions {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .friend-dropdown-btn {
+            padding: 0.25rem 0.5rem;
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.5rem;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .friend-dropdown-btn:hover {
+            background: var(--primary);
+            color: var(--surface);
+        }
+
+        .friends-dropdown-empty {
+            font-size: 0.7rem;
+            color: var(--on-surface-variant);
+            text-align: center;
+            padding: 1rem 0;
+        }
+
+        /* Trade Dropdown */
+        .trade-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .trade-dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 0.5rem;
+            background: var(--surface-container);
+            border: 1px solid #FF6B35;
+            min-width: 320px;
+            z-index: 1000;
+            padding: 1rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+
+        .trade-dropdown.active .trade-dropdown-content {
+            display: block;
+        }
+
+        .trade-dropdown-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.7rem;
+            color: #FF6B35;
+            text-transform: uppercase;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(80,69,59,0.3);
+        }
+
+        .trade-dropdown-section {
+            margin-bottom: 1rem;
+        }
+
+        .trade-dropdown-label {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            color: var(--on-surface-variant);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+
+        .trade-dropdown-select {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--surface-container-low);
+            border: 1px solid rgba(80,69,59,0.3);
+            color: var(--on-surface);
+            font-size: 0.8rem;
+        }
+
+        .trade-dropdown-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .trade-dropdown-item-preview {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--surface-container-low);
+            border: 1px solid rgba(80,69,59,0.3);
+            margin-top: 0.5rem;
+        }
+
+        .trade-dropdown-item-preview img {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+        }
+
+        .trade-dropdown-item-info {
+            flex: 1;
+        }
+
+        .trade-dropdown-item-name {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.65rem;
+            color: var(--primary);
+        }
+
+        .trade-dropdown-item-rarity {
+            font-size: 0.5rem;
+        }
+
+        .trade-dropdown-item-rarity.legendary { color: #ffd700; }
+        .trade-dropdown-item-rarity.epic { color: #a855f7; }
+        .trade-dropdown-item-rarity.rare { color: #3b82f6; }
+        .trade-dropdown-item-rarity.common { color: var(--on-surface-variant); }
+
+        .trade-dropdown-submit {
+            width: 100%;
+            padding: 0.5rem;
+            background: #FF6B35;
+            border: none;
+            color: var(--surface);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            cursor: pointer;
+            margin-top: 0.5rem;
+        }
+
+        .trade-dropdown-submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .trade-dropdown-empty {
+            font-size: 0.7rem;
+            color: var(--on-surface-variant);
+            text-align: center;
+            padding: 1rem;
+        }
+
+        /* ========== FRIENDS MODAL ========== */
+        .friends-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(19,19,24,0.95);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 600;
+            padding: 1rem;
+        }
+
+        .friends-modal.active {
+            display: flex;
+        }
+
+        /* ========== ALMACEN MODAL ========== */
+        .almacen-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(19,19,24,0.95);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 600;
+            padding: 1rem;
+        }
+
+        .almacen-modal.active {
+            display: flex;
+        }
+
+        .almacen-content {
+            background: rgba(31,31,36,0.98);
+            border: 1px solid var(--primary);
+            width: 100%;
+            max-width: 800px;
+            max-height: 85vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .almacen-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid rgba(80,69,59,0.3);
+            background: rgba(14,14,19,0.5);
+        }
+
+        .almacen-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .almacen-body {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .almacen-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 1rem;
+        }
+
+        .almacen-item {
+            background: var(--surface-container-low);
+            border: 1px solid rgba(80,69,59,0.3);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .almacen-item:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .almacen-item img {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+        }
+
+        .almacen-item-name {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.65rem;
+            color: var(--primary);
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .almacen-item-rarity {
+            font-size: 0.55rem;
+            padding: 0.15rem 0.5rem;
+            border: 1px solid;
+        }
+
+        .almacen-item-rarity.legendary { color: #ffd700; border-color: #ffd700; }
+        .almacen-item-rarity.epic { color: #a855f7; border-color: #a855f7; }
+        .almacen-item-rarity.rare { color: #3b82f6; border-color: #3b82f6; }
+        .almacen-item-rarity.common { color: var(--on-surface-variant); border-color: var(--on-surface-variant); }
+
+        .almacen-empty {
+            text-align: center;
+            padding: 3rem;
+            color: var(--on-surface-variant);
+        }
+
+        .almacen-empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* ========== TRATOS MODAL ========== */
+        .tratos-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(19,19,24,0.95);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 700;
+            padding: 1rem;
+        }
+
+        .tratos-modal.active {
+            display: flex;
+        }
+
+        .tratos-content {
+            background: rgba(31,31,36,0.98);
+            border: 1px solid #FF6B35;
+            width: 100%;
+            max-width: 600px;
+            max-height: 85vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tratos-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid rgba(80,69,59,0.3);
+            background: rgba(14,14,19,0.5);
+        }
+
+        .tratos-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem;
+            color: #FF6B35;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .tratos-body {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .tratos-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .trato-card {
+            background: var(--surface-container-low);
+            border: 1px solid rgba(80,69,59,0.3);
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .trato-card.pending {
+            border-color: var(--tertiary);
+        }
+
+        .trato-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .trato-item img {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+        }
+
+        .trato-item-name {
+            font-size: 0.55rem;
+            color: var(--primary);
+            text-align: center;
+        }
+
+        .trato-arrow {
+            color: #FF6B35;
+            font-size: 1.5rem;
+        }
+
+        .trato-info {
+            flex: 1;
+        }
+
+        .trato-users {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+            color: var(--on-surface);
+        }
+
+        .trato-status {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            margin-top: 0.25rem;
+        }
+
+        .trato-status.pending { color: var(--tertiary); }
+        .trato-status.accepted { color: var(--primary); }
+        .trato-status.declined { color: var(--error); }
+
+        .trato-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .trato-btn {
+            padding: 0.5rem 1rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .trato-btn.accept {
+            background: var(--tertiary);
+            color: #0a2e0a;
+        }
+
+        .trato-btn.decline {
+            background: transparent;
+            border: 1px solid var(--error);
+            color: var(--error);
+        }
+
+        .tratos-empty {
+            text-align: center;
+            padding: 3rem;
+            color: var(--on-surface-variant);
+        }
+
+        .friends-content {
+            background: var(--surface-container);
+            border: 1px solid var(--primary);
+            width: 100%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .friends-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--surface-container-low);
+        }
+
+        .friends-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.9rem;
+            color: var(--primary);
+            text-transform: uppercase;
+        }
+
+        .friends-body {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .add-friend-form {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .add-friend-form input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: var(--surface-container-low);
+            border: 1px solid rgba(80,69,59,0.3);
+            color: var(--on-surface);
+            font-size: 0.9rem;
+        }
+
+        .add-friend-form button {
+            padding: 0.75rem 1rem;
+            background: var(--tertiary);
+            border: none;
+            color: #0a2e0a;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        .friends-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .friend-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            background: var(--surface-container-low);
+            border: 1px solid rgba(80,69,59,0.2);
+        }
+
+        .friend-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--surface-container-high);
+            border: 2px solid var(--primary);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .friend-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .friend-info {
+            flex: 1;
+        }
+
+        .friend-name {
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--primary);
+            font-size: 0.9rem;
+        }
+
+        .friend-status {
+            font-size: 0.7rem;
+            color: var(--tertiary);
+        }
+
+        /* ========== RESPONSIVE ========== */
+        @media (max-width: 900px) {
+            .market-main {
+                flex-direction: column;
+            }
+            .terminal-panel, .character-panel, .action-panel {
+                width: 100%;
+            }
+            .character-panel {
+                min-height: 400px;
+            }
+            .auth-container {
+                flex-direction: column;
+                gap: 2rem;
+            }
+            .auth-info {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Scanlines -->
+    <div class="scanlines"></div>
+    <div class="noise"></div>
+
+    <!-- ========== AUTH SCREEN ========== -->
+    <div id="auth-screen" class="auth-container">
+        <div class="auth-bg"></div>
+        <div class="auth-overlay"></div>
+        
+        <div class="auth-box">
+            <div class="auth-logo">
+                <span class="material-symbols-outlined">hub</span>
+                <h2>ARRAKIS TERMINAL</h2>
+            </div>
+            
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">ACCESO</button>
+                <button class="auth-tab" data-tab="register">REGISTRO</button>
+            </div>
+            
+            <!-- Login Form -->
+            <form id="login-form" class="auth-form">
+                <div class="form-group">
+                    <label>USUARIO</label>
+                    <input type="text" id="login-username" required placeholder="Ingresa tu identificador">
+                </div>
+                <div class="form-group">
+                    <label>CONTRASEÑA</label>
+                    <input type="password" id="login-password" required placeholder="••••••••">
+                </div>
+                <button type="submit" class="auth-button">ESTABLECER ENLACE</button>
+            </form>
+            
+            <!-- Register Form -->
+            <form id="register-form" class="auth-form" style="display: none;">
+                <div class="form-group">
+                    <label>USUARIO</label>
+                    <input type="text" id="register-username" required placeholder="Elige tu identificador" minlength="3" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label>CORREO ELECTRÓNICO</label>
+                    <input type="email" id="register-email" required placeholder="tu@email.com">
+                </div>
+                <div class="form-group">
+                    <label>CONTRASEÑA</label>
+                    <input type="password" id="register-password" required placeholder="Mínimo 6 caracteres" minlength="6">
+                </div>
+                <div class="form-group">
+                    <label>CONFIRMAR CONTRASEÑA</label>
+                    <input type="password" id="register-confirm" required placeholder="Repite tu contraseña">
+                </div>
+                <button type="submit" class="auth-button">CREAR IDENTIDAD</button>
+            </form>
+            
+            <div class="auth-error" id="auth-error"></div>
+            
+            <div class="auth-footer">
+                <span class="material-symbols-outlined" style="font-size: 1rem;">security</span>
+                <span>Conexión encriptada 256-bit</span>
+            </div>
+        </div>
+        
+        <div class="auth-info">
+            <h3>MERCADO NEGRO DE ARRAKIS</h3>
+            <p>Accede al sistema de intercambio más peligroso de todo el universo Dune.</p>
+            <ul>
+                <li>✓ Obtener recursos únicos</li>
+                <li>✓ Intercambiar con otros contrabandistas</li>
+                <li>✓ Construir tu red de contactos</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- ========== WELCOME SCREEN ========== -->
+    <div id="welcome-screen" style="display: none; position: fixed; inset: 0; background: var(--surface); z-index: 150; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem;">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 2rem; font-weight: 900; color: var(--primary); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;">
+            ARRAKIS
+        </div>
+        <div id="welcome-message" style="font-family: 'Space Grotesk', sans-serif; font-size: 1.2rem; color: var(--on-surface-variant); margin-bottom: 3rem;">
+            Bienvenido al Sietch de Arrakis
+        </div>
+        <button onclick="enterMarket()" class="intro-button">
+            Entrar al Mercado
+        </button>
+    </div>
+
+    <!-- ========== INTRO SCREEN ========== -->
+    <div id="intro-screen" style="display: none;">
+        <div class="intro-bg" id="intro-bg"></div>
+        <div class="intro-overlay"></div>
+        
+        <div class="corner corner-tl"></div>
+        <div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div>
+        <div class="corner corner-br"></div>
+        
+        <div class="meta-top">
+            <div>SYS.VER // 4.0.9</div>
+            <div>SEC.CLR // NULL</div>
+        </div>
+        
+        <div class="intro-content">
+            <h1 class="intro-title" id="intro-title"></h1>
+            <button class="intro-button glitch-hover" id="enter-btn" style="display: none;">
+                ESTABLECER ENLACE
+            </button>
+        </div>
+        
+        <div class="meta-bottom">
+            <div>0x7A9B.F1</div>
+            <div>MEM // OVERRIDE</div>
+        </div>
+    </div>
+
+    <!-- ========== MARKET SCREEN ========== -->
+    <div id="market-screen">
+        <header class="market-header">
+            <div class="market-logo">Arrakis_Terminal_v4.0</div>
+            <div class="profile-nav" id="profile-nav">
+                <button class="profile-avatar" id="avatar-btn" title="Cambiar avatar">
+                    <span class="material-symbols-outlined">person</span>
+                </button>
+                <span class="profile-username" id="profile-username-display"></span>
+                <div class="friends-dropdown" id="friends-dropdown">
+                    <button class="profile-logout" id="friends-btn">AMIGOS</button>
+                    <div class="friends-dropdown-content" id="friends-dropdown-content">
+                        <div class="friends-dropdown-title">Agregar Contrabandista</div>
+                        <form class="friends-dropdown-form" id="friends-dropdown-form">
+                            <input type="text" id="friend-username" placeholder="Username..." required>
+                            <button type="submit">AGREGAR</button>
+                        </form>
+                        <div class="friends-dropdown-list">
+                            <div class="friends-dropdown-list-title">Mis Contactos</div>
+                            <div id="friends-dropdown-list">
+                                <div class="friends-dropdown-empty">Sin contactos aún</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="trade-dropdown" id="trade-dropdown">
+                    <button class="profile-logout" id="trade-btn" style="border-color: #FF6B35; color: #FF6B35;">INTERCAMBIAR</button>
+                    <div class="trade-dropdown-content" id="trade-dropdown-content">
+                        <div class="trade-dropdown-title">Nuevo Intercambio</div>
+                        <div class="trade-dropdown-section">
+                            <div class="trade-dropdown-label">Seleccionar Contacto</div>
+                            <select class="trade-dropdown-select" id="trade-friend-select">
+                                <option value="">-- Seleccionar amigo --</option>
+                            </select>
+                        </div>
+                        <div class="trade-dropdown-section">
+                            <div class="trade-dropdown-label">Tu Item</div>
+                            <select class="trade-dropdown-select" id="trade-item-select">
+                                <option value="">-- Seleccionar item --</option>
+                            </select>
+                            <div id="trade-your-item-preview"></div>
+                        </div>
+                        <button class="trade-dropdown-submit" id="trade-submit" disabled>
+                            ENVIAR SOLICITUD
+                        </button>
+                    </div>
+                </div>
+                <button class="profile-logout" id="almacen-btn">ALMACÉN</button>
+                <button class="profile-logout" id="tratos-btn">TRATOS</button>
+                <button class="profile-logout" id="logout-btn" style="border-color: var(--error); color: var(--error);">SALIR</button>
+            </div>
+            <div class="solaris-display">
+                <span class="material-symbols-outlined" style="font-size: 1rem;">toll</span>
+                <span id="header-solaris">5.00</span>
+                <span style="font-size: 0.6rem; opacity: 0.6;">SOLARIS</span>
+            </div>
+        </header>
+
+        <div class="market-main">
+            <!-- Terminal Log -->
+            <div class="terminal-panel">
+                <div class="terminal-header">
+                    <span class="terminal-title">Sys_Log :: Hackeando Base de Datos del Desierto</span>
+                    <span class="material-symbols-outlined" style="color: var(--tertiary); font-size: 1rem;">terminal</span>
+                </div>
+                <div class="terminal-log" id="terminal-log">
+                    &gt; INIT SEQUENCE 0x8F9A<br/>
+                    &gt; BYPASSING SECTOR 4 FIREWALL... [OK]<br/>
+                    &gt; EXTRACTING ENCRYPTED CACHE...<br/>
+                    <span class="log-warning">&gt; WARNING: HARKONNEN PATROL DETECTED</span><br/>
+                    &gt; REROUTING SIGNAL THROUGH SIETCH TABR...<br/>
+                    &gt; UPLINK ESTABLISHED.<br/>
+                    &gt; DECRYPTING SMUGGLER COMMUNIQUÉ...<br/>
+                    &gt; PAYLOAD RECEIVED: 45TB.<br/>
+                    &gt; <span class="cursor-blink">_</span>
+                </div>
+            </div>
+
+            <!-- Character -->
+            <div class="character-panel">
+                <div class="dialogue-box">
+                    <p class="dialogue-text" id="dialogue-text">"Spice? Quieres especias? Tengo coordenadas, amigo. Pero el Guild no acepta pagarés, y yo tampoco. Muéstrame los Solaris."</p>
+                    <div class="dialogue-author">- ██████ ██████</div>
+                </div>
+                <div class="character-image">
+                    <img src="Imagen contrabandista.png" alt="Unknown Trafficker" class="character-photo">
+                    <div class="character-censorship"></div>
+                    <div class="character-corners"><span></span></div>
+                </div>
+                <div class="character-meta">
+                    <span>COORD: 45.92 N, 12.04 E</span>
+                    <span>SEÑAL: DÉBIL</span>
+                </div>
+            </div>
+
+            <!-- Action -->
+            <div class="action-panel">
+                <div class="funds-card">
+                    <div class="funds-label">FONDOS DISPONIBLES</div>
+                    <div class="funds-content">
+                        <span class="funds-amount" id="solaris-amount">5.00</span>
+                        <div class="funds-coin">
+                            <div class="funds-coin-icon">S</div>
+                            <span class="funds-coin-label">SOLARIS</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tries-section">
+                    <div class="tries-header">
+                        <span class="tries-label">INTENTOS DE UPLINK</span>
+                        <span class="tries-count" id="tries-count">5 RESTANTES</span>
+                    </div>
+                    <div class="tries-bars" id="tries-bars">
+                        <div class="try-bar"></div>
+                        <div class="try-bar"></div>
+                        <div class="try-bar"></div>
+                        <div class="try-bar"></div>
+                        <div class="try-bar"></div>
+                    </div>
+                </div>
+
+                <button class="action-button" id="spin-btn">
+                    OBTENER RECURSO
+                </button>
+
+                <div class="tries-section" id="exchange-section" style="display: none;">
+                    <button class="action-button" id="exchange-btn" style="background: #FF6B35;">
+                        HACER NEGOCIOS
+                    </button>
+                </div>
+
+                <div class="action-warning">
+                    <span class="warning-badge">[ ADVERTENCIA: OPERACIÓN DE ALTO RIESGO ]</span>
+                </div>
+            </div>
+        </div>
+
+        <footer class="market-footer">
+            <div class="footer-brand">©_FREMEN_NULL_UPLINK</div>
+            <div class="footer-links">
+                <a href="#" class="footer-link">AYUDA ENCRIPTADA</a>
+                <a href="#" class="footer-link">ESTADO DEL SISTEMA</a>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Result Modal -->
+    <div class="modal-overlay" id="result-modal">
+        <div class="modal-content" id="result-content">
+            <h2 class="result-title" id="result-title">¡RECURSO OBTENIDO!</h2>
+            <div class="result-item" id="result-item">
+                <!-- Filled dynamically -->
+            </div>
+            <button class="modal-close" id="result-close">CONTINUAR</button>
+        </div>
+    </div>
+
+    <!-- Exchange Modal -->
+    <div class="exchange-modal" id="exchange-modal">
+        <div class="exchange-content">
+            <div class="exchange-header">
+                <div class="exchange-title">
+                    <span class="material-symbols-outlined">swap_horiz</span>
+                    SISTEMA DE INTERCAMBIO: 2x1
+                </div>
+                <button class="exchange-close" id="exchange-close">&times;</button>
+            </div>
+            <div class="exchange-body">
+                <div class="exchange-inventory">
+                    <div class="exchange-dialogue">
+                        <p class="exchange-dialogue-text">"Podemos hacer negocios, extranjero... Dame dos de tus items y te daré uno mejor. El desierto recompensa a los audaces."</p>
+                    </div>
+                    <h3 class="exchange-section-title">Tu Inventario</h3>
+                    <div class="inventory-grid" id="inventory-grid">
+                        <!-- Filled dynamically -->
+                    </div>
+                </div>
+                <div class="exchange-logic">
+                    <span class="logic-label">2 INPUT</span>
+                    <span class="material-symbols-outlined logic-arrow">keyboard_double_arrow_down</span>
+                    <div class="logic-icon">
+                        <span class="material-symbols-outlined">sync</span>
+                    </div>
+                    <span class="material-symbols-outlined logic-arrow">keyboard_double_arrow_down</span>
+                    <span class="logic-label">1 OUTPUT</span>
+                </div>
+                <div class="exchange-rewards">
+                    <h3 class="exchange-section-title" style="text-align: right;">MATRIZ DE RECOMPENSAS</h3>
+                    <div class="reward-preview">
+                        <div class="reward-card" id="reward-preview">
+                            <span class="material-symbols-outlined" style="font-size: 3rem; color: var(--outline-variant);">question_mark</span>
+                            <span class="reward-name" id="reward-name">???</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="exchange-footer">
+                <div class="exchange-warning">
+                    <span class="material-symbols-outlined" style="font-size: 1rem;">warning</span>
+                    ACCIÓN IRREVERSIBLE
+                </div>
+                <button class="exchange-button" id="confirm-exchange" disabled>
+                    HACER NEGOCIOS
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Friends Modal -->
+    <div class="friends-modal" id="friends-modal">
+        <div class="friends-content">
+            <div class="friends-header">
+                <div class="friends-title">
+                    <span class="material-symbols-outlined" style="font-size: 1rem;">group</span>
+                    RED DE CONTRABANDISTAS
+                </div>
+                <button class="exchange-close" id="friends-close">&times;</button>
+            </div>
+            <div class="friends-body">
+                <form class="add-friend-form" id="add-friend-form">
+                    <input type="text" id="friend-username" placeholder="Buscar contrabandista..." required>
+                    <button type="submit">AGREGAR</button>
+                </form>
+                <div class="friends-list" id="friends-list">
+                    <p style="color: var(--on-surface-variant); font-size: 0.8rem; text-align: center; padding: 2rem;">
+                        No tienes contactos aún. Busca contrabandistas para hacer negocios.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Almacen Modal -->
+    <div class="almacen-modal" id="almacen-modal">
+        <div class="almacen-content">
+            <div class="almacen-header">
+                <div class="almacen-title">
+                    <span class="material-symbols-outlined" style="font-size: 1.2rem;">inventory_2</span>
+                    ALMACÉN DE CONTRABANDO
+                </div>
+                <button class="exchange-close" id="almacen-close">&times;</button>
+            </div>
+            <div class="almacen-body">
+                <div class="almacen-grid" id="almacen-grid">
+                    <!-- Items will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tratos Modal -->
+    <div class="tratos-modal" id="tratos-modal">
+        <div class="tratos-content">
+            <div class="tratos-header">
+                <div class="tratos-title">
+                    <span class="material-symbols-outlined" style="font-size: 1.2rem;">sync_alt</span>
+                    TRATOS ENTRE CONTRABANDISTAS
+                </div>
+                <button class="exchange-close" id="tratos-close">&times;</button>
+            </div>
+            <div class="tratos-body">
+                <div class="tratos-list" id="tratos-list">
+                    <!-- Trades will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio -->
+    <audio id="intro-music" loop preload="auto">
+        <source src="intro-music.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="market-music" loop preload="auto">
+        <source src="market-music.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        // ========== CONFIGURATION ==========
+        const TITLE_TEXT = "ACCESO AL MERCADO NEGRO DEL SIETCH DE ARRAKIS";
+        const INTRO_DELAY = 2500;
+        const GLITCH_CHANCE = 0.15;
+        
+        // Dialogue variations
+        const DIALOGUES = [
+            '"Spice? Quieres especias? Tengo coordenadas, amigo. Pero el Guild no acepta pagarés, y yo tampoco. Muéstrame los Solaris."',
+            '"El desierto es vasto, pero los secretos del sietch son más profundos aún. ¿Trajiste Solaris?"',
+            '"Cuidadito, extranjero. Los Sardaukar vigilan... y los Harkonnen matan. ¿Tienes lo que necesito?"',
+            '"Melange... la especia de la vida. ¿Cuánto estás dispuesto a pagar por un sorbo de eternidad?"',
+            '"Este mercado existe desde antes de la Casa Atreides. ¿Crees que tu presencia aquí es coincidencia?"'
+        ];
+
+        // ========== STATE ==========
+        let solariCount = 5;
+        let inventory = [];
+        let selectedItems = [];
+        let isSpinning = false;
+        let introMusicStarted = false;
+
+        // ========== INVENTORY PERSISTENCE ==========
+        function saveInventory() {
+            localStorage.setItem('arrakis_inventory', JSON.stringify(inventory));
+            localStorage.setItem('arrakis_solaris', solariCount.toString());
+        }
+
+        function loadInventory() {
+            const saved = localStorage.getItem('arrakis_inventory');
+            const savedSolaris = localStorage.getItem('arrakis_solaris');
+            if (saved) {
+                inventory = JSON.parse(saved);
+            }
+            if (savedSolaris) {
+                solariCount = parseFloat(savedSolaris);
+            }
+        }
+
+        // ========== ITEMS DATA ==========
+        const items = [
+            { name: "Sandworm Juvenil", type: "CRIATURA", rarity: "legendario", description: "Un joven Shai-Hulud captado en las arenas de abierto. Su domesticación podría cambiar la guerra.", image: "items/Captura de pantalla 2026-04-16 223231.png" },
+            { name: "Sardaukar", type: "CRIATURA", rarity: "legendario", description: "Soldado de élite del Emperador. Entrenado en la muerte de Salusa Secundus.", image: "items/Captura de pantalla 2026-04-16 223251.png" },
+            { name: "Melange", type: "RECURSO", rarity: "legendario", description: "La Especia. Más valiosa que el oro, más esencial que el agua. Solo existe en Arrakis.", image: "items/Captura de pantalla 2026-04-16 223304.png" },
+            { name: "Harkonnen Brutal", type: "CRIATURA", rarity: "épico", description: "Fuerte, despiadado, hambriento de violencia. El producto perfecto para la guerra.", image: "items/Captura de pantalla 2026-04-16 223329.png" },
+            { name: "Harén Fremen", type: "CRIATURA", rarity: "épico", description: "Mujeres guerreras del desierto. Cada una vale por diez combatientes.", image: "items/Captura de pantalla 2026-04-16 223535.png" },
+            { name: "Maestre Harkonnen", type: "CRIATURA", rarity: "épico", description: "Intelectuales brutales que combinan estrategia militar con crueldad artística.", image: "items/Captura de pantalla 2026-04-16 223539.png" },
+            { name: "Tumba de Atriedes", type: "INFO", rarity: "épico", description: "Planos secretos de la tumba de la Casa Atreides. ¿Quién pagaría por esto?", image: "items/Captura de pantalla 2026-04-16 223547.png" },
+            { name: "Cría de Sandworm", type: "CRIATURA", rarity: "épico", description: "Pequeña, manejable, pero con un hambre voraz que crece con ella.", image: "items/Captura de pantalla 2026-04-16 223553.png" },
+            { name: "Atommóvil", type: "INFO", rarity: "épico", description: "Los planos del vehículo atómico. Un secreto que cambió la guerra.", image: "items/Captura de pantalla 2026-04-16 223557.png" },
+            { name: "Residuo de Filtro", type: "RECURSO", rarity: "raro", description: "Agua recuperada de un filtro stillsuit. Incalculable en el desierto.", image: "items/Captura de pantalla 2026-04-16 223605.png" },
+            { name: "Duna de Arena", type: "INFO", rarity: "raro", description: "Coordenadas de las dunas más altas del Gran Mar de Arena. Un mapa al secreto.", image: "items/Captura de pantalla 2026-04-16 224025.png" },
+            { name: "Distraído", type: "CRIATURA", rarity: "raro", description: "Criatura domesticada para la guerra. Su mente fue borrada para seguir órdenes.", image: "items/Captura de pantalla 2026-04-16 224028.png" },
+            { name: "Giedi Prime", type: "INFO", rarity: "raro", description: "Planos de las instalaciones Harkonnen en su planeta natal.", image: "items/Captura de pantalla 2026-04-16 224030.png" },
+            { name: "Guardián", type: "CRIATURA", rarity: "raro", description: "Máquina de matar automatizada. Programada para no fallar.", image: "items/Captura de pantalla 2026-04-16 224034.png" },
+            { name: "Bebedor", type: "CRIATURA", rarity: "raro", description: "Criatura del desierto que puede sobrevivir semanas sin agua.", image: "items/Captura de pantalla 2026-04-16 224036.png" },
+            { name: "Ataúd", type: "INFO", rarity: "raro", description: "Planos de los ataúdes atemporales de los Bene Gesserit.", image: "items/Captura de pantalla 2026-04-16 224055.png" },
+            { name: "Pavo", type: "CRIATURA", rarity: "raro", description: "Criatura expendedora de los Harkonnen. Engorda rápido, sacrifica fácil.", image: "items/Captura de pantalla 2026-04-16 224103.png" },
+            { name: "Gusano", type: "CRIATURA", rarity: "raro", description: "Hermano menor del Shai-Hulud. También puede atacar si no se controla.", image: "items/Captura de pantalla 2026-04-16 224112.png" },
+            { name: "At摩尔al", type: "INFO", rarity: "raro", description: "Archivo atómic del Museo de la Humanidad. ¿Cómo llegó al mercado negro?", image: "items/Captura de pantalla 2026-04-16 224121.png" },
+            { name: "Vermine", type: "CRIATURA", rarity: "raro", description: "Pequeña criatura del desierto. Solitaria y territorial.", image: "items/Captura de pantalla 2026-04-16 224135.png" },
+            { name: "Vermis", type: "CRIATURA", rarity: "raro", description: "Hermano menor del Sandworm. También se come todo a su paso.", image: "items/Captura de pantalla 2026-04-16 224143.png" },
+            { name: "Cazador", type: "CRIATURA", rarity: "raro", description: "Cazador solitario del desierto. Extremadamente territorial.", image: "items/Captura de pantalla 2026-04-16 224148.png" },
+            { name: "Planos Harkonnen", type: "INFO", rarity: "raro", description: "Documentos que detallan los métodos de exterminio Harkonnen.", image: "items/Captura de pantalla 2026-04-16 224155.png" },
+            { name: "Hacedor", type: "CRIATURA", rarity: "raro", description: "Criatura que construye estructuras en las dunas. Muy territorial.", image: "items/Captura de pantalla 2026-04-16 224205.png" },
+            { name: "Chakal", type: "CRIATURA", rarity: "raro", description: "El Chacal del Desierto. Cazador implacable de caravanas.", image: "items/Captura de pantalla 2026-04-16 224213.png" },
+            { name: "Ritual Fremen", type: "INFO", rarity: "raro", description: "Manuscritos del ritual Fremen de agua de muerte.", image: "items/Captura de pantalla 2026-04-16 224223.png" },
+            { name: "Mapa", type: "INFO", rarity: "raro", description: "Mapa actualizado de las tormentas de arena de la estación.", image: "items/Captura de pantalla 2026-04-16 224249.png" },
+            { name: "Fosil", type: "RECURSO", rarity: "raro", description: "Fósil de criatura pre-Desiertización. Extremadamente valioso.", image: "items/Captura de pantalla 2026-04-16 224257.png" },
+            { name: "Muro", type: "INFO", rarity: "raro", description: "Planos de construcción para muros defensivos de arena compactada.", image: "items/Captura de pantalla 2026-04-16 224304.png" },
+            { name: "Espejo", type: "RECURSO", rarity: "raro", description: "Material reflectante para señales ópticas a través del desierto.", image: "items/Captura de pantalla 2026-04-16 224312.png" },
+            { name: "Cristal", type: "RECURSO", rarity: "raro", description: "Cristal de cuarzo del desierto.Usado para fabricar lentes.", image: "items/Captura de pantalla 2026-04-16 224326.png" },
+            { name: "Cuchillo", type: "RECURSO", rarity: "raro", description: "Cuchillo de combate Fremen. Forjado en las arenas.", image: "items/Captura de pantalla 2026-04-16 224334.png" },
+            { name: "Destilería", type: "INFO", rarity: "raro", description: "Manual de construcción para alambiques de agua de muerte.", image: "items/Captura de pantalla 2026-04-16 224348.png" },
+            { name: "Bolsas", type: "RECURSO", rarity: "común", description: "Bolsas de cuero de arena. Resistentes al desgaste.", image: "items/Captura de pantalla 2026-04-16 224358.png" },
+            { name: "Tierra", type: "RECURSO", rarity: "común", description: "Muestra de tierra del Mar de Arena. Para análisis.", image: "items/Captura de pantalla 2026-04-16 224407.png" }
+        ];
+
+        // ========== DOM ELEMENTS ==========
+        const introScreen = document.getElementById('intro-screen');
+        const marketScreen = document.getElementById('market-screen');
+        const introTitle = document.getElementById('intro-title');
+        const enterBtn = document.getElementById('enter-btn');
+        const introMusic = document.getElementById('intro-music');
+        const marketMusic = document.getElementById('market-music');
+        const spinBtn = document.getElementById('spin-btn');
+        const exchangeBtn = document.getElementById('exchange-btn');
+        const resultModal = document.getElementById('result-modal');
+        const exchangeModal = document.getElementById('exchange-modal');
+
+        // ========== GLITCH EFFECT ==========
+        function glitchText(text, element, duration = 2000) {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*';
+            const original = text.split('');
+            let iterations = 0;
+            
+            const interval = setInterval(() => {
+                element.innerHTML = original.map((char, i) => {
+                    if (char === ' ') return ' ';
+                    if (i < iterations) return char;
+                    return `<span class="glitch-char" style="animation-delay: ${i * 0.03}s">${chars[Math.floor(Math.random() * chars.length)]}</span>`;
+                }).join('');
+                
+                if (iterations >= original.length) {
+                    clearInterval(interval);
+                    element.innerHTML = text;
+                }
+                iterations += 1/3;
+            }, 30);
+        }
+
+        // ========== AUDIO ==========
+        function playIntroMusic() {
+            console.log('Intentando reproducir música...');
+            introMusic.currentTime = 0;
+            introMusic.volume = 0.5;
+            introMusic.play()
+                .then(() => console.log('Música iniciada correctamente'))
+                .catch(e => console.log('Error al reproducir:', e));
+            introMusicStarted = true;
+        }
+
+        function fadeOutAudio(audio, duration = 1000) {
+            const startVolume = audio.volume;
+            const startTime = Date.now();
+            
+            const fade = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const progress = elapsed / duration;
+                audio.volume = startVolume * (1 - progress);
+                if (progress >= 1) {
+                    clearInterval(fade);
+                    audio.pause();
+                    audio.currentTime = 0;
+                }
+            }, 50);
+        }
+
+        function playMarketMusic() {
+            marketMusic.volume = 0.2;
+            marketMusic.play().catch(e => console.log('Audio autoplay blocked'));
+        }
+
+        // ========== INTRO ANIMATION ==========
+        function initIntro() {
+            // If music hasn't started yet, start it from beginning
+            // Otherwise continue playing (already started on auth screen)
+            if (!introMusicStarted) {
+                playIntroMusic();
+            } else if (introMusic.paused) {
+                introMusic.play().catch(e => console.log('Audio autoplay blocked'));
+            }
+            
+            setTimeout(() => {
+                glitchText(TITLE_TEXT, introTitle);
+            }, 500);
+
+            setTimeout(() => {
+                enterBtn.style.display = 'block';
+                enterBtn.style.animation = 'buttonFadeIn 0.5s ease forwards';
+            }, INTRO_DELAY);
+        }
+
+        // ========== TRANSITION TO MARKET ==========
+        function enterMarket() {
+            fadeOutAudio(introMusic, 800);
+            introScreen.classList.add('hidden');
+            
+            setTimeout(() => {
+                introScreen.style.display = 'none';
+                marketScreen.classList.add('active');
+                playMarketMusic();
+                updateUI();
+            }, 800);
+        }
+
+        // ========== GAME LOGIC ==========
+        function spin() {
+            if (solariCount <= 0 || isSpinning) return;
+            
+            isSpinning = true;
+            spinBtn.disabled = true;
+            
+            // Add terminal log entry
+            addTerminalLog('&gt; INICIANDO OPERACIÓN DE EXTRACCIÓN...');
+            
+            setTimeout(() => {
+                addTerminalLog('&gt; BYPASSING HARKONNEN FIREWALL... [OK]');
+            }, 500);
+            
+            setTimeout(() => {
+                addTerminalLog('&gt; ACCEDIENDO A ARCHIVOS DEL SIETCH...');
+            }, 1000);
+            
+            setTimeout(() => {
+                addTerminalLog('&gt; DESCARGANDO RECURSO...');
+            }, 1500);
+            
+            setTimeout(() => {
+                solariCount--;
+                saveInventory();
+                updateUI();
+                
+                // Check for glitch (15% chance)
+                if (Math.random() < GLITCH_CHANCE) {
+                    showError();
+                } else {
+                    // Get random item
+                    const item = items[Math.floor(Math.random() * items.length)];
+                    inventory.push(item);
+                    saveInventory(); // Guardar en localStorage
+                    showResult(item);
+                }
+                
+                isSpinning = false;
+                if (solariCount > 0) {
+                    spinBtn.disabled = false;
+                }
+                
+                // Change dialogue occasionally
+                if (Math.random() > 0.5) {
+                    updateDialogue();
+                }
+            }, 2000);
+        }
+
+        function showError() {
+            addTerminalLog('<span class="log-warning">&gt; ERROR: CONEXIÓN INTERCEPTADA</span>');
+            addTerminalLog('<span class="log-warning">&gt; HAS SIDO TIMADO</span>');
+            
+            const resultContent = document.getElementById('result-content');
+            const resultTitle = document.getElementById('result-title');
+            const resultItem = document.getElementById('result-item');
+            
+            resultTitle.textContent = 'HAS SIDO TIMADO';
+            resultTitle.classList.add('error');
+            resultItem.innerHTML = `
+                <span class="material-symbols-outlined" style="font-size: 4rem; color: var(--error);">error</span>
+                <p style="color: var(--error); font-style: italic;">"Los Harkonnen interceptaron tu transacción. Tu Solaris se perdió en las arenas."</p>
+            `;
+            
+            resultModal.classList.add('active');
+            
+            setTimeout(() => {
+                resultTitle.classList.remove('error');
+            }, 500);
+        }
+
+        function showResult(item) {
+            addTerminalLog('<span class="log-success">&gt; RECURSO OBTENIDO: ' + item.name.toUpperCase() + '</span>');
+            
+            const resultTitle = document.getElementById('result-title');
+            const resultItem = document.getElementById('result-item');
+            
+            resultTitle.textContent = '¡RECURSO OBTENIDO!';
+            resultItem.innerHTML = `
+                <img src="${item.image}" alt="${item.name}" class="result-item-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect fill=%22%231f1f24%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23f2c08d%22 font-size=%2240%22%3E?%3C/text%3E%3C/svg%3E'">
+                <div class="result-item-name">${item.name}</div>
+                <div class="result-item-type">${item.type}</div>
+                <div class="result-item-rarity ${item.rarity.toLowerCase()}">${item.rarity.toUpperCase()}</div>
+                <div class="result-item-description">${item.description}</div>
+            `;
+            
+            resultModal.classList.add('active');
+        }
+
+        function addTerminalLog(message) {
+            const log = document.getElementById('terminal-log');
+            const entries = log.innerHTML.split('<br/>').filter(e => e.trim());
+            if (entries.length > 15) {
+                entries.shift();
+            }
+            entries.push(message);
+            log.innerHTML = entries.join('<br/>') + '<br/><span class="cursor-blink">_</span>';
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateDialogue() {
+            const dialogue = document.getElementById('dialogue-text');
+            dialogue.textContent = DIALOGUES[Math.floor(Math.random() * DIALOGUES.length)];
+        }
+
+        function updateUI() {
+            document.getElementById('solaris-amount').textContent = solariCount.toFixed(2);
+            document.getElementById('header-solaris').textContent = solariCount.toFixed(2);
+            document.getElementById('tries-count').textContent = solariCount + ' RESTANTES';
+            
+            const bars = document.querySelectorAll('.try-bar');
+            bars.forEach((bar, i) => {
+                if (i >= solariCount) {
+                    bar.classList.add('used');
+                } else {
+                    bar.classList.remove('used');
+                }
+            });
+            
+            // Show exchange button if player has items
+            if (inventory.length >= 2 && solariCount === 0) {
+                document.getElementById('exchange-section').style.display = 'block';
+            }
+        }
+
+        // ========== EXCHANGE MODAL ==========
+        function openExchangeModal() {
+            if (inventory.length < 2) return;
+            
+            selectedItems = [];
+            renderInventory();
+            updateRewardPreview();
+            exchangeModal.classList.add('active');
+        }
+
+        function renderInventory() {
+            const grid = document.getElementById('inventory-grid');
+            grid.innerHTML = inventory.map((item, i) => `
+                <div class="inventory-item ${selectedItems.includes(i) ? 'selected' : ''}" data-index="${i}">
+                    <img src="${item.image}" alt="${item.name}" onerror="this.style.display='none'">
+                    <span class="inventory-item-name">${item.name}</span>
+                </div>
+            `).join('');
+            
+            grid.querySelectorAll('.inventory-item').forEach(el => {
+                el.addEventListener('click', () => toggleItemSelection(parseInt(el.dataset.index)));
+            });
+        }
+
+        function toggleItemSelection(index) {
+            const idx = selectedItems.indexOf(index);
+            if (idx > -1) {
+                selectedItems.splice(idx, 1);
+            } else if (selectedItems.length < 2) {
+                selectedItems.push(index);
+            } else {
+                // Replace oldest selection
+                selectedItems.shift();
+                selectedItems.push(index);
+            }
+            
+            renderInventory();
+            updateRewardPreview();
+        }
+
+        function updateRewardPreview() {
+            const preview = document.getElementById('reward-preview');
+            const rewardName = document.getElementById('reward-name');
+            const confirmBtn = document.getElementById('confirm-exchange');
+            
+            if (selectedItems.length === 2) {
+                const reward = items[Math.floor(Math.random() * items.length)];
+                preview.innerHTML = `
+                    <img src="${reward.image}" alt="${reward.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect fill=%22%231f1f24%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23f2c08d%22 font-size=%2240%22%3E?%3C/text%3E%3C/svg%3E'">
+                    <span class="reward-name">${reward.name}</span>
+                `;
+                preview.classList.remove('empty');
+                rewardName.textContent = reward.name;
+                confirmBtn.disabled = false;
+                confirmBtn.dataset.rewardIndex = items.indexOf(reward);
+            } else {
+                preview.innerHTML = `
+                    <span class="material-symbols-outlined" style="font-size: 3rem; color: var(--outline-variant);">question_mark</span>
+                    <span class="reward-name">???</span>
+                `;
+                preview.classList.add('empty');
+                rewardName.textContent = '???';
+                confirmBtn.disabled = true;
+            }
+        }
+
+        function confirmExchange() {
+            if (selectedItems.length !== 2) return;
+            
+            const rewardIndex = parseInt(document.getElementById('confirm-exchange').dataset.rewardIndex);
+            const reward = items[rewardIndex];
+            
+            // Remove selected items
+            const toRemove = [...selectedItems].sort((a, b) => b - a);
+            toRemove.forEach(i => inventory.splice(i, 1));
+            
+            // Add reward
+            inventory.push(reward);
+            
+            addTerminalLog('<span class="log-success">&gt; INTERCAMBIO COMPLETADO</span>');
+            addTerminalLog('<span class="log-success">&gt; RECURSO OBTENIDO: ' + reward.name.toUpperCase() + '</span>');
+            
+            saveInventory(); // Guardar inventario
+            exchangeModal.classList.remove('active');
+            updateUI();
+            
+            // Show result
+            showResult(reward);
+        }
+
+        // ========== EVENT LISTENERS ==========
+        enterBtn.addEventListener('click', enterMarket);
+        spinBtn.addEventListener('click', spin);
+        exchangeBtn.addEventListener('click', openExchangeModal);
+        
+        document.getElementById('result-close').addEventListener('click', () => {
+            resultModal.classList.remove('active');
+        });
+        
+        document.getElementById('exchange-close').addEventListener('click', () => {
+            exchangeModal.classList.remove('active');
+        });
+        
+        document.getElementById('confirm-exchange').addEventListener('click', confirmExchange);
+
+        // ========== AUTH SYSTEM ==========
+        const API_URL = 'http://localhost:3001';
+        
+        let currentUser = null;
+        let authToken = localStorage.getItem('arrakis_token');
+
+        // Check if already logged in
+        async function checkAuth() {
+            if (!authToken) {
+                showAuthScreen();
+                return;
+            }
+            
+            try {
+                const res = await fetch(API_URL + '/api/auth/me', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                
+                if (res.ok) {
+                    currentUser = await res.json();
+                    solariCount = currentUser.solaris || 5;
+                    showMarketWithAuth();
+                } else {
+                    localStorage.removeItem('arrakis_token');
+                    showAuthScreen();
+                }
+            } catch (e) {
+                // Offline mode - use localStorage
+                const savedUser = localStorage.getItem('arrakis_user');
+                if (savedUser) {
+                    currentUser = JSON.parse(savedUser);
+                    solariCount = currentUser.solaris || 5;
+                }
+                showMarketWithAuth();
+            }
+        }
+
+        function showAuthScreen() {
+            document.getElementById('auth-screen').classList.remove('hidden');
+            document.getElementById('intro-screen').style.display = 'none';
+            document.getElementById('market-screen').classList.remove('active');
+        }
+
+        function hideAllScreens() {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('intro-screen').style.display = 'none';
+            document.getElementById('market-screen').classList.remove('active');
+        }
+
+        function hideAuthScreen() {
+            document.getElementById('auth-screen').classList.add('hidden');
+        }
+
+        function showMarketWithAuth() {
+            // Load inventory from localStorage
+            loadInventory();
+            
+            // Hide auth screen and show intro screen with animations
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('welcome-screen').style.display = 'none';
+            document.getElementById('market-screen').classList.remove('active');
+            
+            // Show intro screen and trigger its animation
+            const introScreen = document.getElementById('intro-screen');
+            introScreen.style.display = 'flex';
+            introScreen.classList.add('visible');
+            
+            // Update UI with loaded data
+            updateUI();
+            
+            // Initialize the intro animation (glitch effect, button reveal)
+            initIntro();
+        }
+
+        function enterMarket() {
+            // Fade out intro music
+            fadeOutAudio(introMusic, 800);
+            
+            // Hide intro screen with animation
+            const introScreen = document.getElementById('intro-screen');
+            introScreen.classList.add('hidden');
+            
+            // Also hide welcome screen if it exists
+            document.getElementById('welcome-screen').style.display = 'none';
+            
+            // Play transition effect and show market
+            setTimeout(() => {
+                introScreen.style.display = 'none';
+                document.getElementById('market-screen').classList.add('active');
+                playMarketMusic();
+                updateProfileNav();
+                updateUI();
+            }, 800);
+        }
+
+        function updateProfileNav() {
+            const nav = document.getElementById('profile-nav');
+            if (currentUser) {
+                nav.classList.add('visible');
+                const avatarEl = nav.querySelector('.profile-avatar');
+                if (currentUser.avatar_url) {
+                    avatarEl.innerHTML = `<img src="${currentUser.avatar_url}" alt="avatar">`;
+                } else {
+                    avatarEl.innerHTML = '<span class="material-symbols-outlined">person</span>';
+                }
+                nav.querySelector('.profile-username').textContent = currentUser.username;
+            }
+        }
+
+        // Auth tabs
+        document.querySelectorAll('.auth-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                const tabName = tab.dataset.tab;
+                document.getElementById('login-form').style.display = tabName === 'login' ? 'block' : 'none';
+                document.getElementById('register-form').style.display = tabName === 'register' ? 'block' : 'none';
+            });
+        });
+
+        // Login handler
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            
+            try {
+                const res = await fetch(API_URL + '/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    showAuthError(data.error || 'Error en login');
+                    return;
+                }
+                
+                authToken = data.token;
+                currentUser = data.user;
+                localStorage.setItem('arrakis_token', data.token);
+                localStorage.setItem('arrakis_user', JSON.stringify(data.user));
+                
+                showMarketWithAuth();
+            } catch (e) {
+                // Offline mode simulation
+                const savedUser = localStorage.getItem('arrakis_user');
+                if (savedUser && JSON.parse(savedUser).username === username) {
+                    currentUser = JSON.parse(savedUser);
+                    showMarketWithAuth();
+                } else {
+                    showAuthError('Servidor no disponible. Modo offline.');
+                    showMarketWithAuth();
+                }
+            }
+        });
+
+        // Register handler
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('register-username').value;
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            const confirm = document.getElementById('register-confirm').value;
+            
+            if (password !== confirm) {
+                showAuthError('Las contraseñas no coinciden');
+                return;
+            }
+            
+            try {
+                const res = await fetch(API_URL + '/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    showAuthError(data.error || 'Error en registro');
+                    return;
+                }
+                
+                authToken = data.token;
+                currentUser = data.user;
+                localStorage.setItem('arrakis_token', data.token);
+                localStorage.setItem('arrakis_user', JSON.stringify(data.user));
+                
+                showMarketWithAuth();
+            } catch (e) {
+                // Offline mode - create local user
+                currentUser = { username, email, solaris: 5.00 };
+                localStorage.setItem('arrakis_user', JSON.stringify(currentUser));
+                showMarketWithAuth();
+            }
+        });
+
+        function showAuthError(message) {
+            const err = document.getElementById('auth-error');
+            err.textContent = message;
+            err.classList.add('visible');
+        }
+
+        // Logout
+        document.getElementById('logout-btn')?.addEventListener('click', () => {
+            localStorage.removeItem('arrakis_token');
+            localStorage.removeItem('arrakis_user');
+            authToken = null;
+            currentUser = null;
+            location.reload();
+        });
+
+        // Friends dropdown toggle
+        document.getElementById('friends-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('trade-dropdown').classList.remove('active');
+            const dropdown = document.getElementById('friends-dropdown');
+            dropdown.classList.toggle('active');
+            loadFriendsDropdown();
+        });
+
+        // Trade dropdown toggle
+        document.getElementById('trade-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('friends-dropdown').classList.remove('active');
+            const dropdown = document.getElementById('trade-dropdown');
+            dropdown.classList.toggle('active');
+            if (dropdown.classList.contains('active')) {
+                populateTradeDropdowns();
+            }
+        });
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', () => {
+            document.getElementById('friends-dropdown').classList.remove('active');
+            document.getElementById('trade-dropdown').classList.remove('active');
+        });
+
+        // Prevent dropdown close when clicking inside
+        document.getElementById('friends-dropdown-content')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+        document.getElementById('trade-dropdown-content')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        // Load friends for dropdown
+        let friendsList = [];
+        async function loadFriendsDropdown() {
+            const list = document.getElementById('friends-dropdown-list');
+            if (!authToken) {
+                list.innerHTML = '<div class="friends-dropdown-empty">Inicia sesión para agregar amigos</div>';
+                return;
+            }
+            
+            try {
+                const res = await fetch(API_URL + '/api/friends', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                friendsList = await res.json();
+                
+                if (friendsList.length === 0) {
+                    list.innerHTML = '<div class="friends-dropdown-empty">Sin contactos aún</div>';
+                } else {
+                    list.innerHTML = friendsList.map(f => `
+                        <div class="friend-dropdown-item">
+                            <div class="friend-dropdown-avatar">
+                                <span class="material-symbols-outlined" style="font-size: 0.9rem; color: var(--primary);">person</span>
+                            </div>
+                            <div class="friend-dropdown-info">
+                                <div class="friend-dropdown-name">${f.username}</div>
+                                <div class="friend-dropdown-status">● Conectado</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                list.innerHTML = '<div class="friends-dropdown-empty">Error al cargar</div>';
+            }
+        }
+
+        // Add friend from dropdown
+        document.getElementById('friends-dropdown-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('friend-username').value;
+            
+            try {
+                const res = await fetch(API_URL + '/api/friends/request', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({ username })
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    alert(data.error || 'Error al agregar amigo');
+                    return;
+                }
+                
+                alert('Solicitud enviada a ' + username);
+                document.getElementById('friend-username').value = '';
+                loadFriendsDropdown();
+            } catch (e) {
+                alert('Modo offline: solicitud simulada');
+            }
+        });
+
+        // Populate trade dropdowns
+        async function populateTradeDropdowns() {
+            const friendSelect = document.getElementById('trade-friend-select');
+            const itemSelect = document.getElementById('trade-item-select');
+            
+            // Load inventory first (in case it wasn't loaded)
+            loadInventory();
+            
+            // Load friends
+            if (friendsList.length === 0) {
+                try {
+                    const res = await fetch(API_URL + '/api/friends', {
+                        headers: { 'Authorization': 'Bearer ' + authToken }
+                    });
+                    friendsList = await res.json();
+                } catch (e) {
+                    friendsList = [];
+                }
+            }
+            
+            friendSelect.innerHTML = '<option value="">-- Seleccionar amigo --</option>' +
+                friendsList.map(f => `<option value="${f.id}">${f.username}</option>`).join('');
+            
+            // Load inventory items
+            if (inventory.length === 0) {
+                itemSelect.innerHTML = '<option value="">-- No tienes items --</option>';
+            } else {
+                itemSelect.innerHTML = '<option value="">-- Seleccionar item --</option>' +
+                    inventory.map((item, i) => `<option value="${i}">${item.name}</option>`).join('');
+            }
+            
+            document.getElementById('trade-your-item-preview').innerHTML = '';
+            document.getElementById('trade-submit').disabled = true;
+        }
+
+        // Trade item selection
+        document.getElementById('trade-item-select')?.addEventListener('change', (e) => {
+            const idx = e.target.value;
+            const preview = document.getElementById('trade-your-item-preview');
+            const submitBtn = document.getElementById('trade-submit');
+            const friendId = document.getElementById('trade-friend-select').value;
+            
+            if (idx !== '' && friendId !== '') {
+                const item = inventory[idx];
+                preview.innerHTML = `
+                    <div class="trade-dropdown-item-preview">
+                        <img src="${item.image}" alt="${item.name}" onerror="this.style.display='none'">
+                        <div class="trade-dropdown-item-info">
+                            <div class="trade-dropdown-item-name">${item.name}</div>
+                            <div class="trade-dropdown-item-rarity ${item.rarity.toLowerCase()}">${item.rarity.toUpperCase()}</div>
+                        </div>
+                    </div>
+                `;
+                submitBtn.disabled = false;
+            } else {
+                preview.innerHTML = '';
+                submitBtn.disabled = true;
+            }
+        });
+
+        document.getElementById('trade-friend-select')?.addEventListener('change', (e) => {
+            const friendId = e.target.value;
+            const itemIdx = document.getElementById('trade-item-select').value;
+            const submitBtn = document.getElementById('trade-submit');
+            
+            if (friendId !== '' && itemIdx !== '') {
+                submitBtn.disabled = false;
+            } else {
+                submitBtn.disabled = true;
+            }
+        });
+
+        // Submit trade request
+        document.getElementById('trade-submit')?.addEventListener('click', async () => {
+            const friendId = document.getElementById('trade-friend-select').value;
+            const itemIdx = document.getElementById('trade-item-select').value;
+            
+            if (!friendId || itemIdx === '') return;
+            
+            const item = inventory[itemIdx];
+            const friend = friendsList.find(f => f.id == friendId);
+            
+            if (!confirm(`Enviar solicitud de intercambio a ${friend.username} por "${item.name}"?`)) return;
+            
+            try {
+                const res = await fetch(API_URL + '/api/trades', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({ 
+                        receiver_id: friendId,
+                        item_id: item.id || itemIdx
+                    })
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    alert(data.error || 'Error al enviar solicitud');
+                    return;
+                }
+                
+                alert('Solicitud enviada a ' + friend.username);
+                document.getElementById('trade-dropdown').classList.remove('active');
+            } catch (e) {
+                alert('Modo offline: solicitud simulada');
+            }
+        });
+
+        // Load friends list
+        async function loadFriends() {
+            const friendsList = document.getElementById('friends-list');
+            if (!authToken) return;
+            
+            try {
+                const res = await fetch(API_URL + '/api/friends', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const friends = await res.json();
+                
+                if (friends.length === 0) {
+                    friendsList.innerHTML = `<p style="color: var(--on-surface-variant); font-size: 0.8rem; text-align: center; padding: 2rem;">No tienes contactos aún. Busca contrabandistas para hacer negocios.</p>`;
+                } else {
+                    friendsList.innerHTML = friends.map(f => `
+                        <div class="friend-item">
+                            <div class="friend-avatar">
+                                ${f.avatar_url ? `<img src="${f.avatar_url}" alt="${f.username}">` : '<span class="material-symbols-outlined" style="font-size:1.2rem;color:var(--primary)">person</span>'}
+                            </div>
+                            <div class="friend-info">
+                                <div class="friend-name">${f.username}</div>
+                                <div class="friend-status">● Conectado</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                friendsList.innerHTML = `<p style="color: var(--error); font-size: 0.8rem; text-align: center;">Error al cargar amigos</p>`;
+            }
+        }
+
+        // Close friends modal
+        document.getElementById('friends-close')?.addEventListener('click', () => {
+            document.getElementById('friends-modal').classList.remove('active');
+        });
+
+        // Add friend form
+        document.getElementById('add-friend-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('friend-username').value;
+            
+            try {
+                const res = await fetch(API_URL + '/api/friends/request', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({ username })
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    alert(data.error || 'Error al agregar amigo');
+                    return;
+                }
+                
+                alert('Solicitud enviada a ' + username);
+                document.getElementById('friend-username').value = '';
+            } catch (e) {
+                alert('Modo offline: solicitud simulada');
+            }
+        });
+
+        // ========== ALMACEN ==========
+        document.getElementById('almacen-btn')?.addEventListener('click', async () => {
+            await loadAlmacen();
+            document.getElementById('almacen-modal').classList.add('active');
+        });
+
+        document.getElementById('almacen-close')?.addEventListener('click', () => {
+            document.getElementById('almacen-modal').classList.remove('active');
+        });
+
+        async function loadAlmacen() {
+            const grid = document.getElementById('almacen-grid');
+            // Load from localStorage
+            loadInventory();
+            
+            if (inventory.length === 0) {
+                grid.innerHTML = `
+                    <div class="almacen-empty" style="grid-column: 1/-1;">
+                        <div class="almacen-empty-icon">
+                            <span class="material-symbols-outlined" style="font-size: 4rem; color: var(--outline);">inventory_2</span>
+                        </div>
+                        <p>Tu almacén está vacío.</p>
+                        <p style="font-size: 0.75rem; margin-top: 0.5rem;">Usa Solaris para obtener recursos en el mercado.</p>
+                    </div>
+                `;
+            } else {
+                grid.innerHTML = inventory.map(item => `
+                    <div class="almacen-item">
+                        <img src="${item.image}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%231f1f24%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23f2c08d%22 font-size=%2220%22>?</text></svg>'">
+                        <div class="almacen-item-name">${item.name}</div>
+                        <div class="almacen-item-rarity ${item.rarity}">${item.rarity}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // ========== TRATOS ==========
+        document.getElementById('tratos-btn')?.addEventListener('click', async () => {
+            await loadTratos();
+            document.getElementById('tratos-modal').classList.add('active');
+        });
+
+        document.getElementById('tratos-close')?.addEventListener('click', () => {
+            document.getElementById('tratos-modal').classList.remove('active');
+        });
+
+        async function loadTratos() {
+            const list = document.getElementById('tratos-list');
+            if (!authToken) return;
+            
+            try {
+                const res = await fetch(API_URL + '/api/trades', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                const trades = await res.json();
+                
+                if (trades.length === 0) {
+                    list.innerHTML = `
+                        <div class="tratos-empty">
+                            <span class="material-symbols-outlined" style="font-size: 3rem; color: var(--outline);">sync_alt</span>
+                            <p>No hay tratos activos.</p>
+                            <p style="font-size: 0.75rem; margin-top: 0.5rem;">Agrega amigos y ofrece tus items para negociar.</p>
+                        </div>
+                    `;
+                } else {
+                    list.innerHTML = trades.map(trade => {
+                        const isSender = trade.sender_id === currentUser?.id;
+                        const otherUser = isSender ? trade.receiver_username : trade.sender_username;
+                        const showActions = !isSender && trade.status === 'pending';
+                        
+                        return `
+                            <div class="trato-card ${trade.status}">
+                                <div class="trato-item">
+                                    <img src="${trade.sender_item_image}" alt="${trade.sender_item_name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%231f1f24%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23f2c08d%22 font-size=%2220%22>?</text></svg>'">
+                                    <div class="trato-item-name">${trade.sender_item_name}</div>
+                                </div>
+                                <div class="trato-arrow">→</div>
+                                <div class="trato-info">
+                                    <div class="trato-users">@${otherUser}</div>
+                                    <div class="trato-status ${trade.status}">${trade.status === 'pending' ? 'Pendiente' : trade.status === 'accepted' ? 'Aceptado' : 'Rechazado'}</div>
+                                </div>
+                                ${showActions ? `
+                                    <div class="trato-actions">
+                                        <button class="trato-btn accept" onclick="respondTrade(${trade.id}, 'accept')">ACEPTAR</button>
+                                        <button class="trato-btn decline" onclick="respondTrade(${trade.id}, 'decline')">RECHAZAR</button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (e) {
+                list.innerHTML = `<p style="color: var(--error); text-align: center;">Error al cargar tratos</p>`;
+            }
+        }
+
+        async function respondTrade(tradeId, action) {
+            try {
+                const res = await fetch(API_URL + '/api/trades/' + tradeId + '/' + action, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    }
+                });
+                
+                if (res.ok) {
+                    await loadTratos();
+                    addLog(action === 'accept' ? 'Trato aceptado.' : 'Trato rechazado.');
+                }
+            } catch (e) {
+                alert('Error al procesar trato');
+            }
+        }
+
+        // ========== INIT ==========
+        checkAuth();
+        
+        // Start music on first click anywhere on the page
+        document.body.addEventListener('click', function startMusic() {
+            document.body.removeEventListener('click', startMusic);
+            playIntroMusic();
+        }, { once: true });
+    </script>
+</body>
+</html>
